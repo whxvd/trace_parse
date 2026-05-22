@@ -54,9 +54,12 @@ def Lean.Parser.Parser.traceParse
   let s := mkParserState input
   let s := { s with traces := #[.stop] }
   let s := p.fn.run ictx pmctx toks s
-  logInfo <| ← do
+  (if s.errorMsg.isNone then logInfo else logWarning) <| ← do
     let mut msg : MessageData := .nil
-    msg := msg ++ m!"Parser had arity {s.stxStack.size} and produced:"
+    match s.errorMsg with
+    | none => msg := msg ++ m!"Parser succeeded, "
+    | some e => msg := msg ++ m!"Parser failed:" ++ indentD m!"{e}" ++ "\n" ++ "Parser "
+    msg := msg ++ m!"had arity {s.stxStack.size} and produced:"
     msg := (msg ++ indentD · ++ "\n") <| .intercalate "\n" <|
       stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
     if (String.pos! input s.pos).IsAtEnd then
@@ -123,39 +126,3 @@ elab_rules : command
   let input := input.getString
   withRef tk do
     Lean.traceParse parserName input omits parserNameRef stxToMsg
-
-/--
-info: Parser had arity 1 and produced:
-  x
-Parsing ended at input:1:2 and left
-  "x"
-unparsed.
--/
-#guard_msgs (info) in
-#parse : ident "x x"
-
-/--
-info: Parser had arity 1 and produced:
-  Lean.Syntax.ident (Lean.SourceInfo.none) "x".toRawSubstring `x []
-Input was consumed completely.
----
-trace: [debug] Syntax: `x
--/
-#guard_msgs in
-#parse : ident +repr -token "x"
-
--- Anonymous parser with custom omit list
-def myFrequentOmits : List Name := [`token]
-/--
-info: Parser had arity 2 and produced:
-  x
-  x
-Parsing ended at input:1:4 and left
-  "x"
-unparsed.
----
-trace: [debug] Syntax: `x
-[debug] Syntax: `x
--/
-#guard_msgs in
-run_cmd (ident >> ident).traceParse "x x x" myFrequentOmits
