@@ -1,6 +1,6 @@
 import Lean
 import Lean.Parser
-open Lean Parser Elab Command
+open Lean Parser Meta Elab Command
 
 #check Lean.Elab.Command.elabTraceParse
 #check Lean.Parser.ParserTrace
@@ -79,12 +79,9 @@ def Lean.Parser.Parser.traceParse
     for trace in s.traces do
       trace.toDebugTrace omits.contains posStr
 
-def Lean.traceParse.resolveParserName
-  (parserName : Name) (ref? : Option Syntax := none)
-: CommandElabM Parser
-:=
-  (ref?.elim id withRef) do
-    let res ← liftCoreM <| Lean.Parser.resolveParserName <| mkIdent parserName
+def resolveParser (parserName : Ident) : CommandElabM Parser :=
+  withRef parserName do
+    let res ← liftCoreM <| Lean.Parser.resolveParserName <| parserName
     if res.isEmpty then throwError "Unknown parser `{parserName}`"
     let [res] := res | throwError "Ambiguous parser name `{parserName}`"
     let p ← match res with
@@ -95,18 +92,8 @@ def Lean.traceParse.resolveParserName
         | .const c => pure c
         | _ => throwError "Unexpected parser alias `{parserName}`, must not take parameters"
 
-def Lean.traceParse
-  (parserName : Name) (input : String)
-  (omits : List Name := [])
-  (parserNameRef? : Option Syntax := none)
-  (stxToMessageData : Syntax → MessageData := .ofSyntax)
-: CommandElabM Unit
-:= do
-  let p : Parser ← traceParse.resolveParserName parserName parserNameRef?
-  p.traceParse input omits stxToMessageData
-
 syntax (name := parse)
-  "#parse" (" : " ident)?
+  "#parse" (" : " term:max)?
     ppSpace ("+" noWs (&"format" <|> &"repr"))?
     ppSpace ("-" noWs ident)*
     ppSpace str
@@ -118,11 +105,27 @@ def removeSourceInfo : Syntax → Syntax
   | .node _ k children => .node .none k (children.map removeSourceInfo)
   | .missing => .missing
 
+def collectTokensIntoContext (p : Parser) : Parser where
+  info := p.info
+  fn :=
+    -- The following is taken from `evalParserConst`. Without this, the
+    -- tokens/keyword are not registered. Needed when `p` is an anonymous parser
+    -- resulting from the evaluation of a Lean term.
+    adaptUncacheableContextFn (fun ctx => { ctx with tokens := p.info.collectTokens [] |>.foldl (fun tks tk => tks.insert tk tk) ctx.tokens }) p.fn
+
 elab_rules : command
-| `(#parse%$tk $[: $parserNameStx]? $[+$stxToMsg?]? $[-$omits:ident]* $input:str) =>
-  let (parserName, parserNameRef) := match parserNameStx with
-    | none => (`term, none)
-    | some id => (id.getId, some id)
+| `(#parse%$tk $[: $parser]? $[+$stxToMsg?]? $[-$omits:ident]* $input:str) => do
+  let parser : Parser ← match parser with
+    | none => resolveParser <| mkIdent `term
+    | some term => withRef term <| match term with
+        | `($id:ident) => resolveParser id
+        | term => liftTermElabM do
+          let τ : Expr := .const ``Parser []
+          let e : Expr ← Term.elabTermEnsuringType term τ
+          -- logInfo ((Format.pretty · 47) <| repr <| removeSourceInfo <| term.raw)
+          -- logInfo ((Format.pretty · 47) <| repr e)
+          let p ← unsafe evalExpr Parser τ e
+          return collectTokensIntoContext p
   let stxToMsg := match stxToMsg? with
     | none => .ofSyntax
     | some tk => .ofFormat ∘ if tk.raw[0].getAtomVal == "format"
@@ -130,4 +133,4 @@ elab_rules : command
   let omits := omits.toList.map (·.getId)
   let input := input.getString
   withRef tk do
-    Lean.traceParse parserName input omits parserNameRef stxToMsg
+    parser.traceParse input omits stxToMsg
