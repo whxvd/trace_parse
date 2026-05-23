@@ -2,6 +2,9 @@ import Lean
 import Lean.Parser
 open Lean Parser Elab Command
 
+#check Lean.Elab.Command.elabTraceParse
+#check Lean.Parser.ParserTrace
+
 def Lean.Parser.ParserTrace.toDebugTrace
   (t : ParserTrace)
   (omitNode : String → Bool)
@@ -54,14 +57,16 @@ def Lean.Parser.Parser.traceParse
   let s := mkParserState input
   let s := { s with traces := #[.stop] }
   let s := p.fn.run ictx pmctx toks s
-  (if s.errorMsg.isNone then logInfo else logWarning) <| ← do
+  (if s.errorMsg.isNone then logInfo else logError) <| ← do
     let mut msg : MessageData := .nil
     match s.errorMsg with
-    | none => msg := msg ++ m!"Parser succeeded, "
-    | some e => msg := msg ++ m!"Parser failed:" ++ indentD m!"{e}" ++ "\n" ++ "Parser "
-    msg := msg ++ m!"had arity {s.stxStack.size} and produced:"
-    msg := (msg ++ indentD · ++ "\n") <| .intercalate "\n" <|
-      stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
+    | none => msg := (msg ++ ·) <|
+      (m!"Parser succeeded, had arity {s.stxStack.size} and produced:" ++ ·) <|
+      (indentD · ++ "\n") <| .intercalate "\n" <|
+        stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
+    | some e => msg := (msg ++ ·) <|
+      (m!"Parser failed with arity {s.stxStack.size} and error:" ++ ·) <|
+      (indentD m!"{e}") ++ "\n"
     if (String.pos! input s.pos).IsAtEnd then
       msg := msg ++ "Input was consumed completely."
     else
