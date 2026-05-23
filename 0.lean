@@ -2,6 +2,12 @@ import TraceParse
 import Lean.Parser
 open Lean Parser
 
+-- Recall that `syntax p := …` defines a named parser `p`, meaning: `p` now is
+-- defined as `…`. But `p` is not registered anywhere; the syntax of Lean is not
+-- extended by `p`. Contrast this with `syntax (name := p) … : term`, where `p`
+-- is not only defined as a parser but registered to the category parser for
+-- `term`, extending the syntax of Lean terms with `p`.
+
 syntax a   := "a"
 syntax ab  := "a" "b"
 syntax aab := "a" "a" "b"
@@ -50,13 +56,13 @@ unparsed.
 
 -- That means parsers in Lean are non-backtracking by default. This does not at
 -- all mean that backtracking is not possible or does not happen. But
--- backtracking must be explicitly invoked. Some constructs do that
--- automatically, like category parsers (by means of `longestMatchFn`). But each
--- construct can do it in a way specifically tailored to semantics/heuristics
--- most appropriate in the particular case.
+-- backtracking must be explicitly invoked. Some constructs do that implicitly,
+-- like category parsers (by means of `longestMatchFn`). But each construct can
+-- do it in a way specifically tailored to semantics/heuristics most appropriate
+-- in the particular case.
 --
 -- A canonical and user-facing way of turning a parser into a backtracking
--- parser is `atomic`.  Its definitioin, `Lean.Parser.atomicFn`, literally does
+-- parser is `atomic`.  Its definition, `Lean.Parser.atomicFn`, literally does
 -- nothing but remembering the initial position when an `atomic(p)` is run, and
 -- resetting it when `p` fails.
 
