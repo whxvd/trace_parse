@@ -2,14 +2,6 @@ import TraceParse
 import Lean.Parser
 open Lean Parser
 
-set_option pp.rawOnError true
-
--- Recall that `syntax p := …` defines a named parser `p`, meaning: `p` now is
--- defined as `…`. But `p` is not registered anywhere; the syntax of Lean is not
--- extended by `p`. Contrast this with `syntax (name := p) … : term`, where `p`
--- is not only defined as a parser but registered to the category parser for
--- `term`, extending the syntax of Lean terms with `p`. Examples:
-
 syntax a   := "a"
 syntax ab  := "a" "b"
 
@@ -115,7 +107,7 @@ Input was consumed completely.
 -- the resulting state of `p`. When both succeed, the longest match wins.
 --
 -- (This entire file is written by hand.) I wondered about the reason for this
--- peculiar default semantics and asked Claude. Its output seems plausible
+-- seemingly peculiar semantics and asked Claude. Its output seems plausible
 -- enough to me: https://claude.ai/share/c1768f94-65bf-4225-b8e0-1299caaf4f6d.
 
 -- Minimal example: `ab <|> a` fails on input "a", because `ab` fails on "a"
@@ -164,13 +156,14 @@ trace: [debug] ✅️ Running `node oe'` at input:1:0 with lhsPrec 0
 
 #check ParserInfo.firstTokens
 
--- Category parsers essentially run all parsers registered for the category from
--- the initial state, i.e., with unconditional backtracking. (There almost
--- certainly is some premiliminary filtering using `ParserInfo.firstTokens`, but
--- that is semantically irrelevant.) The resuling state of each parser is scored
--- with a triple `(position, success, priority)`. `position` is the input
--- position of the resulting state. `success` is 0 on failure and 1 on success.
--- `priority` can be assigned, e.g., by `syntax (priority := …) … : cat`.
+-- Category parsers essentially run all parsers registered for the category,
+-- each starting from the initial state (including the initial position), i.e.
+-- with unconditional backtracking. (There almost certainly is some
+-- premiliminary filtering using `ParserInfo.firstTokens`, but that is
+-- semantically irrelevant.) The resuling state of each parser is scored with a
+-- triple `(position, success, priority)`. `position` is the input position of
+-- the resulting state. `success` is 0 on failure and 1 on success. `priority`
+-- can be assigned, e.g., by `syntax (priority := …) … : cat`.
 --
 -- The state with the lexicographicall greatest triple (lexicographically) wins.
 -- That means longest matches always win, even when the resulting state is a
