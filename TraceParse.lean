@@ -109,10 +109,26 @@ def collectTokensIntoContext (p : Parser) : Parser where
   info := p.info
   fn :=
     -- The following is taken from `evalParserConst`. Without this, the
-    -- tokens/keyword are not registered. Needed when `p` is an anonymous parser
-    -- resulting from the evaluation of a Lean term.
-    adaptUncacheableContextFn (fun ctx => { ctx with tokens := p.info.collectTokens [] |>.foldl (fun tks tk => tks.insert tk tk) ctx.tokens }) p.fn
+    -- tokens/keyword used/defined in a parser `p`, when `p : Parser` is an
+    -- anonymous parser resulting from the evaluation of a Lean term.
+    adaptUncacheableContextFn
+      (fun ctx => { ctx with tokens := p.info.collectTokens [] |>.foldl (fun tks tk => tks.insert tk tk) ctx.tokens })
+      p.fn
 
+/--
+Try to parse a string and display the resulting parser state und a trace.
+
+- `#parse s` tries to parse the string `s` as a term
+- `#parse : id s` tries to parse `s` as an `id`, any identifier resolvable by
+  `Lean.Parser.resolveParserName`
+- `#parse : e s` runs any `e : Lean.Parser.Parser` on `s`
+- `#parse +format s` or `#parse +repr s` use `format` or `repr` instead of the
+  pretty printer for the resulting `Syntax`
+- `#parse -omit₁ -omit₂ … s` omits nodes for `omit₁`, `omit₂`, … from the
+  resulting trace, for example `#parse : binderIdent -token -orElse "x"`
+
+The order of argments is exemplified by `#parse : ident +repr -token "x"`.
+-/
 elab_rules : command
 | `(#parse%$tk $[: $parser]? $[+$stxToMsg?]? $[-$omits:ident]* $input:str) => do
   let parser : Parser ← match parser with

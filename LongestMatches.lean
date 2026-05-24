@@ -6,8 +6,8 @@ syntax a   := "a"
 syntax ab  := "a" "b"
 
 -- What follows is just a preliminary illustration of relevant parts of the
--- parser state after a parser run. The named parser `a` is run on input "a a".
--- The parser succeeds, but ends before consuming the complete input.
+-- parser state after a parser is run. The named parser `a` is run on input "a
+-- a". The parser succeeds, but ends before consuming the complete input.
 
 /--
 info: Parser succeeded, had arity 1 and produced:
@@ -55,12 +55,11 @@ unparsed.
 --
 -- The canonical and user-facing way of turning a parser into a backtracking
 -- parser is `atomic`.  Its definition, `Lean.Parser.atomicFn`, literally does
--- nothing but remembering the initial position, and resetting it when `p`
--- fails.
+-- nothing but remembers the initial position, and resets it when `p` fails.
 
 syntax atomic_ab := atomic(ab)
 
--- Now the position after failure is rewound to the start of the input:
+-- Now the position after failure is rewound to the start of the input.
 
 /--
 error: Parser failed with arity 1 and error:
@@ -82,8 +81,7 @@ unparsed.
 --
 -- run the argument parser, pop all resulting elements from the stack, put them
 -- into a new `Syntax` node, and push that single node back on the stack.
---
--- Parsers defined with, e.g., `syntax` or `leading_parser` already do this
+-- Parsers defined with, e.g., `syntax` or `leading_parser` always do this
 -- wrapping into a single node. So in practice most parsers are of arity 1. Here
 -- is a parser of arity 2, using the lower level parsing framework:
 
@@ -102,15 +100,16 @@ Input was consumed completely.
 -- The initial `ParserState` is stored (especially including its input
 -- position). `p` is run from the initial state. When it fails and has consumed
 -- some input, `p <|> q` fails with the failure state of `p`; no backtracking
--- happens in this case. When `p` succeeds, backtracking does happen, and `q`,
--- too, is run from the initial state. When `q` fails, `p <|> q` succeeds with
--- the resulting state of `p`. When both succeed, the longest match wins.
+-- happens in this case, `q` is not tried. When `p` succeeds, backtracking does
+-- happen, and `q`, too, is run from the initial state. When `q` fails,
+-- `p <|> q` succeeds with the resulting state of `p`. When both succeed, the
+-- longest match wins.
 --
 -- (This entire file is written by hand.) I wondered about the reason for this
 -- seemingly peculiar semantics of `orelse` and asked Claude. Its output seems
 -- plausible enough to me:
 -- https://claude.ai/share/c1768f94-65bf-4225-b8e0-1299caaf4f6d.
-
+--
 -- Minimal example: `ab <|> a` fails on input "a", because `ab` fails on "a"
 -- after consuming a token. `a` is not tried at all.
 
@@ -131,7 +130,7 @@ trace: [debug] ❌️ Running `node oe` at input:1:0 with lhsPrec 0
 #parse : oe -token "a"
 
 -- `atomic(ab) <|> a` on the same input succeeds, because the `atomic` makes
--- `atomic(ab)` consume no input any more on failure.
+-- `atomic(ab)` consume no input on failure any more.
 
 syntax oe' := atomic(ab) <|> a
 /--
@@ -155,22 +154,22 @@ trace: [debug] ✅️ Running `node oe'` at input:1:0 with lhsPrec 0
 #guard_msgs in
 #parse : oe' -token "a a"
 
-#check ParserInfo.firstTokens
-
 -- Category parsers essentially run all parsers registered for the category,
 -- each starting from the initial state (which includes the initial position),
 -- i.e. with unconditional backtracking. (There almost certainly is some
 -- preliminary filtering of parsers using `ParserInfo.firstTokens`, but that is
 -- semantically irrelevant.) The resuling state of each parser is scored with a
 -- triple `(position, success, priority)`. `position` is the input position of
--- the resulting state. `success` is 0 on failure and 1 on success. `priority`
--- can be assigned, e.g., by `syntax (priority := …) … : cat`.
+-- the resulting state (a byte index in a UTF-8 string, so not necessarily
+-- coinciding with character counts). `success` is 0 on failure and 1 on
+-- success. `priority` can be assigned, e.g., by
+-- `syntax (priority := …) … : cat`.
 --
--- The state with the lexicographically greatest triple wins. That means longest
--- matches always win, even when the resulting state is a failure. Success is
--- secondary. This is a heuristic that usually leads to good and very specific
--- error messages. But it can also lead to great confusion when extending the
--- syntax.
+-- The state with the lexicographically greatest triple wins. (On a tie a choice
+-- node is inserted.) That means longest matches always win, even when the
+-- resulting state is a failure state. Success is secondary. This is a heuristic
+-- that usually leads to good and very specific error messages. But it can also
+-- lead to great confusion when extending and debugging the syntax.
 --
 -- Here is a minimal example exhibiting a category and an input where a
 -- successful parser gets rejected because of a failing parser with a longer
@@ -200,7 +199,7 @@ trace: [debug] ❌️ Running `category lm:0` at input:1:0 with lhsPrec 0
 #guard_msgs in
 #parse : lm -token "a a"
 
--- The same with atomic. Now `lm₁'` gets a lower score than `lm₂'` on the same
+-- The same with `atomic`. Now `lm₁'` gets a lower score than `lm₂'` on the same
 -- input as above.
 
 declare_syntax_cat lm'
@@ -231,48 +230,22 @@ trace: [debug] ✅️ Running `category lm':0` at input:1:0 with lhsPrec 0
 #guard_msgs in
 #parse : lm' -token "a a"
 
--- Now we are able to understand why `syntax ident ":" term "↦" term : term`
--- "breaks" parsing of type ascription, and why the error messages are so weird.
--- For the sake of short traces we introduce a new category with minimal other
--- parsers. And we are able to understand why
-
-declare_syntax_cat t
-syntax (name := tIdent) ident : t
-syntax (name := tFun) ident ":" t "↦" t : t
-syntax (name := tTypeAscription) "(" t ":" t ")" : t
-
-/--
-error: Parser failed with arity 1 and error:
-  expected '↦'
-Parsing ended at input:1:6 and left
-  ")"
-unparsed.
----
-trace: [debug] ❌️ Running `category t:0` at input:1:0 with lhsPrec 0
-  [debug] Syntax: "("
-  [debug] ❌️ Running `longestMatchFn` at input:1:0 with lhsPrec 0
-    [debug] ❌️ Running `node tTypeAscription` at input:1:0 with lhsPrec 1024
-      [debug] Syntax: "("
-      [debug] ❌️ Running `category t:0` at input:1:1 with lhsPrec 1024
-        [debug] Syntax: `x
-        [debug] ❌️ Running `longestMatchFn` at input:1:1 with lhsPrec 0
-          [debug] ❌️ Running `node tFun` at input:1:1 with lhsPrec 1024
-            [debug] Syntax: `x
-            [debug] Syntax: ":"
-            [debug] ✅️ Running `category t:0` at input:1:5 with lhsPrec 1024
-              [debug] Syntax: `X
-              [debug] ✅️ Running `longestMatchFn` at input:1:5 with lhsPrec 0
-                [debug] ❌️ Running `node tFun` at input:1:5 with lhsPrec 1024
-                  [debug] Syntax: `X
-                  [debug] Syntax: ")"
-                  [debug] Error at input:1:6: expected ':'
-                  [debug] Syntax: <missing>
-                [debug] New parser has score: (6, (0, 1000))
-                [debug] ✅️ Running `node tIdent` at input:1:5 with lhsPrec 1024
-                  [debug] Syntax: `X
-                [debug] New parser has score: (6, (1, 1000))
--/
-
-#parse : t -optional -withoutPosition -withoutForbidden -token -orElse "(x : X)"
-
-#parse : t -optional -withoutPosition -withoutForbidden -token -orElse "(x : X)"
+-- Now we are fully able to understand
+--
+-- - why `syntax ident ":" term "↦" term : term` "breaks" parsing of type
+--   ascription, e.g. `(x : X)`,
+-- - how the "weird" error messages are chosen,
+-- - why `syntax atomic(ident ":" term "↦") term : term` fixes the issue, and
+-- - why `syntax ident atomic(":" term "↦") term : term` suffices, too.
+--
+-- I leave that as an exercise to the reader. In part because the traces get
+-- very long and unwieldy in `#guard_msgs`. They are better viewed and explored
+-- in the InfoView, where folding is available. But mostly because I finished my
+-- job of fully understanding the relevant underlying aspects of the Lean
+-- parsing framework, and finding and displaying minimal examples to exhibit
+-- them.
+--
+-- The solution can be looked up in Thomas Murril's write-up of the 2026-05-13
+-- Meta Café, available at
+-- https://docs.google.com/document/d/1nRIGUMm9S7lnM5GYBYt7I_NtH3xLPZD7WVe_R4l0SPU/edit?tab=t.0,
+-- which is complete and correct.
