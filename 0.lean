@@ -48,12 +48,12 @@ unparsed.
 #parse : ab "a a"
 
 -- That means parsers in Lean are non-backtracking by default. Not at all does
--- this mean that backtracking is not possible or does not happen. Some
+-- this mean that backtracking is not possible or does not happen in Lean. Some
 -- constructs do that implicitly, like category parsers (by means of
 -- `longestMatchFn`). But each construct can do it in a way specifically
 -- tailored to semantics/heuristics most appropriate in the particular case.
 --
--- A canonical and user-facing way of turning a parser into a backtracking
+-- The canonical and user-facing way of turning a parser into a backtracking
 -- parser is `atomic`.  Its definition, `Lean.Parser.atomicFn`, literally does
 -- nothing but remembering the initial position, and resetting it when `p`
 -- fails.
@@ -84,8 +84,8 @@ unparsed.
 -- into a new `Syntax` node, and push that single node back on the stack.
 --
 -- Parsers defined with, e.g., `syntax` or `leading_parser` already do this
--- wrapping into a single node. So most parsers are of arity 1. Here is a parser
--- of arity 2, using the lower level parsing framework:
+-- wrapping into a single node. So in practice most parsers are of arity 1. Here
+-- is a parser of arity 2, using the lower level parsing framework:
 
 /--
 info: Parser succeeded, had arity 2 and produced:
@@ -107,12 +107,12 @@ Input was consumed completely.
 -- the resulting state of `p`. When both succeed, the longest match wins.
 --
 -- (This entire file is written by hand.) I wondered about the reason for this
--- seemingly peculiar semantics and asked Claude. Its output seems plausible
--- enough to me: https://claude.ai/share/c1768f94-65bf-4225-b8e0-1299caaf4f6d.
+-- seemingly peculiar semantics of `orelse` and asked Claude. Its output seems
+-- plausible enough to me:
+-- https://claude.ai/share/c1768f94-65bf-4225-b8e0-1299caaf4f6d.
 
 -- Minimal example: `ab <|> a` fails on input "a", because `ab` fails on "a"
--- after consuming a token. `a` is not tried, which also is reflected in the
--- trace.
+-- after consuming a token. `a` is not tried at all.
 
 syntax oe := ab <|> a
 /--
@@ -130,7 +130,8 @@ trace: [debug] ❌️ Running `node oe` at input:1:0 with lhsPrec 0
 #guard_msgs in
 #parse : oe -token "a"
 
--- `atomic(ab) <|> a` on the same input succeeds.
+-- `atomic(ab) <|> a` on the same input succeeds, because the `atomic` makes
+-- `atomic(ab)` consume no input any more on failure.
 
 syntax oe' := atomic(ab) <|> a
 /--
@@ -157,23 +158,23 @@ trace: [debug] ✅️ Running `node oe'` at input:1:0 with lhsPrec 0
 #check ParserInfo.firstTokens
 
 -- Category parsers essentially run all parsers registered for the category,
--- each starting from the initial state (including the initial position), i.e.
--- with unconditional backtracking. (There almost certainly is some
--- premiliminary filtering using `ParserInfo.firstTokens`, but that is
+-- each starting from the initial state (which includes the initial position),
+-- i.e. with unconditional backtracking. (There almost certainly is some
+-- preliminary filtering of parsers using `ParserInfo.firstTokens`, but that is
 -- semantically irrelevant.) The resuling state of each parser is scored with a
 -- triple `(position, success, priority)`. `position` is the input position of
 -- the resulting state. `success` is 0 on failure and 1 on success. `priority`
 -- can be assigned, e.g., by `syntax (priority := …) … : cat`.
 --
--- The state with the lexicographicall greatest triple (lexicographically) wins.
--- That means longest matches always win, even when the resulting state is a
--- failure. Success is secondary. This is a heuristic that usually leads to good
--- and very specific error messages. But it can also lead to great confusion
--- when extending the syntax.
+-- The state with the lexicographically greatest triple wins. That means longest
+-- matches always win, even when the resulting state is a failure. Success is
+-- secondary. This is a heuristic that usually leads to good and very specific
+-- error messages. But it can also lead to great confusion when extending the
+-- syntax.
 --
 -- Here is a minimal example exhibiting a category and an input where a
 -- successful parser gets rejected because of a failing parser with a longer
--- match.
+-- match. Note the scores in the trace.
 
 declare_syntax_cat lm
 syntax (name := lm₁) "a" : lm
@@ -196,7 +197,7 @@ trace: [debug] ❌️ Running `category lm:0` at input:1:0 with lhsPrec 0
       [debug] Syntax: "a"
     [debug] New parser has score: (2, (1, 1000))
 -/
-#guard_msgs (error, trace) in
+#guard_msgs in
 #parse : lm -token "a a"
 
 -- The same with atomic. Now `lm₁'` gets a lower score than `lm₂'` on the same
@@ -231,8 +232,9 @@ trace: [debug] ✅️ Running `category lm':0` at input:1:0 with lhsPrec 0
 #parse : lm' -token "a a"
 
 -- Now we are able to understand why `syntax ident ":" term "↦" term : term`
--- "breaks" parsing of type ascription. For the sake of short traces we
--- introduce a new category with minimal other parsers.
+-- "breaks" parsing of type ascription, and why the error messages are so weird.
+-- For the sake of short traces we introduce a new category with minimal other
+-- parsers. And we are able to understand why
 
 declare_syntax_cat t
 syntax (name := tIdent) ident : t
