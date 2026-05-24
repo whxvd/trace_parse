@@ -56,7 +56,7 @@ def Lean.Parser.Parser.traceParse
   let toks := getTokenTable (← getEnv)
   let s := mkParserState input
   let s := { s with traces := #[.stop] }
-  let s := p.fn.run ictx pmctx toks s
+  let s := (andthenFn whitespace p.fn).run ictx pmctx toks s
   (if s.errorMsg.isNone then logInfo else logError) <| ← do
     let mut msg : MessageData := .nil
     match s.errorMsg with
