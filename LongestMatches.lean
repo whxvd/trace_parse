@@ -1,6 +1,4 @@
 import TraceParse
-import Lean.Parser
-open Lean Parser
 
 syntax a   := "a"
 syntax ab  := "a" "b"
@@ -77,13 +75,13 @@ unparsed.
 -- pushes on the stack is called the arity of `p`. That in principle can be a
 -- variable number for a given parser. Parser combinators like
 --
-#check (Lean.Parser.node : SyntaxNodeKind → Parser → Parser)
+--   `Lean.Parser.node : SyntaxNodeKind → Parser → Parser`
 --
 -- run the argument parser, pop all resulting elements from the stack, put them
 -- into a new `Syntax` node, and push that single node back on the stack.
 -- Parsers defined with, e.g., `syntax` or `leading_parser` always do this
--- wrapping into a single node. So in practice most parsers are of arity 1. Here
--- is a parser of arity 2, using the lower level parsing framework:
+-- automatically. So in practice most parsers are of arity 1. Here is a parser
+-- of arity 2, using the lower level parsing framework:
 
 /--
 info: Parser succeeded, had arity 2 and produced:
@@ -114,6 +112,7 @@ Input was consumed completely.
 -- after consuming a token. `a` is not tried at all.
 
 syntax oe := ab <|> a
+
 /--
 error: Parser failed with arity 1 and error:
   unexpected end of input; expected 'b'
@@ -133,6 +132,7 @@ trace: [debug] ❌️ Running `node oe` at input:1:0 with lhsPrec 0
 -- `atomic(ab)` consume no input on failure any more.
 
 syntax oe' := atomic(ab) <|> a
+
 /--
 info: Parser succeeded, had arity 1 and produced:
   a
@@ -164,13 +164,13 @@ trace: [debug] ✅️ Running `node oe'` at input:1:0 with lhsPrec 0
 -- coinciding with character counts). `success` is 0 on failure and 1 on
 -- success. `priority` can be assigned, e.g., by
 -- `syntax (priority := …) … : cat`.
---
--- The state with the lexicographically greatest triple wins. (On a tie a choice
--- node is inserted.) That means longest matches always win, even when the
--- resulting state is a failure state. Success is secondary. This is a heuristic
--- that usually leads to good and very specific error messages. But it can also
--- lead to great confusion when extending and debugging the syntax.
---
+
+-- The states with the lexicographically greatest triples win (on a tie
+-- resulting in a choice node). That means longest matches always win, even when
+-- the resulting state is a failure state. Success is secondary. This is a
+-- heuristic that usually leads to good and very specific error messages. But it
+-- can also lead to great confusion when extending and debugging the syntax.
+
 -- Here is a minimal example exhibiting a category and an input where a
 -- successful parser gets rejected because of a failing parser with a longer
 -- match. Note the scores in the trace.
@@ -178,6 +178,7 @@ trace: [debug] ✅️ Running `node oe'` at input:1:0 with lhsPrec 0
 declare_syntax_cat lm
 syntax (name := lm₁) "a" : lm
 syntax (name := lm₂) "a" "a" "b" : lm
+
 /--
 error: Parser failed with arity 1 and error:
   unexpected end of input; expected 'b'
@@ -230,6 +231,37 @@ trace: [debug] ✅️ Running `category lm':0` at input:1:0 with lhsPrec 0
 #guard_msgs in
 #parse : lm' -token "a a"
 
+-- `"a" atomic("a" "b")` works, too. In that case both parses end at the same
+-- position, and the second element of the triple (success) decides.
+
+declare_syntax_cat lm''
+syntax (name := lm₁'') "a" atomic("a" "b") : lm''
+syntax (name := lm₂'') "a" : lm''
+
+/--
+info: Parser succeeded, had arity 1 and produced:
+  a
+Parsing ended at input:1:2 and left
+  "a"
+unparsed.
+---
+trace: [debug] ✅️ Running `category lm'':0` at input:1:0 with lhsPrec 0
+  [debug] Syntax: "a"
+  [debug] ✅️ Running `longestMatchFn` at input:1:0 with lhsPrec 0
+    [debug] ✅️ Running `node lm₂''` at input:1:0 with lhsPrec 1024
+      [debug] Syntax: "a"
+    [debug] New parser has score: (2, (1, 1000))
+    [debug] ❌️ Running `node lm₁''` at input:1:0 with lhsPrec 1024
+      [debug] Syntax: "a"
+      [debug] ❌️ Running `atomic` at input:1:2 with lhsPrec 1024
+        [debug] Syntax: "a"
+        [debug] Error at input:1:3: unexpected end of input; expected 'b'
+        [debug] Syntax: <missing>
+    [debug] New parser has score: (2, (0, 1000))
+-/
+#guard_msgs in
+#parse : lm'' -token "a a"
+
 -- Now we are fully able to understand
 --
 -- - why `syntax ident ":" term "↦" term : term` "breaks" parsing of type
@@ -242,10 +274,9 @@ trace: [debug] ✅️ Running `category lm':0` at input:1:0 with lhsPrec 0
 -- very long and unwieldy in `#guard_msgs`. They are better viewed and explored
 -- in the InfoView, where folding is available. But mostly because I finished my
 -- job of fully understanding the relevant underlying aspects of the Lean
--- parsing framework, and finding and displaying minimal examples to exhibit
+-- parsing framework, and finding and displaying minimal examples to showcase
 -- them.
 --
--- The solution can be looked up in Thomas Murril's write-up of the 2026-05-13
--- Meta Café, available at
--- https://docs.google.com/document/d/1nRIGUMm9S7lnM5GYBYt7I_NtH3xLPZD7WVe_R4l0SPU/edit?tab=t.0,
--- which is complete and correct.
+-- The solution can be looked up in Thomas Murrills' write-up of the 2026-05-13
+-- Meta Café at
+-- https://docs.google.com/document/d/1nRIGUMm9S7lnM5GYBYt7I_NtH3xLPZD7WVe_R4l0SPU/edit?tab=t.0.

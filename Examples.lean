@@ -1,6 +1,8 @@
 import TraceParse
 open Lean Parser
 
+-- Examples of what `#parse` can do more than `#trace_parse`
+
 -- Info or error with final state when parser succeeds
 
 /--
