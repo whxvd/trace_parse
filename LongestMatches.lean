@@ -75,17 +75,15 @@ unparsed.
 -- preliminary filtering of parsers using `ParserInfo.firstTokens`, but that is
 -- semantically irrelevant.) The resuling state of each parser is scored with a
 -- triple `(position, success, priority)`. `position` is the input position of
--- the resulting state (a byte index in a UTF-8 string, so not necessarily
--- coinciding with character counts). `success` is 0 on failure and 1 on
--- success. `priority` can be assigned, e.g., by
--- `syntax (priority := …) … : cat`.
-
+-- the resulting state. `success` is 0 on failure and 1 on success. `priority`
+-- can be assigned, e.g., by `syntax (priority := …) … : cat`.
+--
 -- The states with the lexicographically greatest triples win (on a tie
 -- resulting in a choice node). That means longest matches always win, even when
 -- the resulting state is a failure state. Success is secondary. This is a
 -- heuristic that usually leads to good and very specific error messages. But it
 -- can also lead to great confusion when extending and debugging the syntax.
-
+--
 -- Here is a minimal example exhibiting a category and an input where a
 -- successful parser gets rejected because of a failing parser with a longer
 -- match. Note the scores in the trace.
