@@ -1,9 +1,7 @@
-import Lean
-import Lean.Parser
+module
+public import Lean
+public meta section
 open Lean Parser Meta Elab Command
-
-#check Lean.Elab.Command.elabTraceParse
-#check Lean.Parser.ParserTrace
 
 def Lean.Parser.ParserTrace.toDebugTrace
   (t : ParserTrace)
@@ -28,8 +26,8 @@ def Lean.Parser.ParserTrace.toDebugTrace
   | .result stx =>
     trace[debug] m!"Syntax: {format stx}"
 
-def Lean.MessageData.intercalate
-  (m : MessageData) (l : List MessageData) : MessageData := .joinSep l m
+def Lean.MessageData.intercalate : MessageData → List MessageData → MessageData
+:= flip .joinSep
 
 def Lean.Parser.Parser.traceParse
   (p : Parser) (input : String)
@@ -79,6 +77,8 @@ def Lean.Parser.Parser.traceParse
     for trace in s.traces do
       trace.toDebugTrace omits.contains posStr
 
+namespace TraceParse
+
 def resolveParser (parserName : Ident) : CommandElabM Parser :=
   withRef parserName do
     let res ← liftCoreM <| Lean.Parser.resolveParserName <| parserName
@@ -99,6 +99,8 @@ syntax (name := parse)
     ppSpace str
 : command
 
+
+-- Taken from https://lean-lang.org/doc/reference/latest/Notations-and-Macros/Defining-New-Syntax/#removeSourceInfo-_LPAR_in-Representing-Syntax-as-Constructors_RPAR_
 def removeSourceInfo : Syntax → Syntax
   | .atom _ str => .atom .none str
   | .ident _ str x pre => .ident .none str x pre
@@ -108,9 +110,10 @@ def removeSourceInfo : Syntax → Syntax
 def collectTokensIntoContext (p : Parser) : Parser where
   info := p.info
   fn :=
-    -- The following is taken from `evalParserConst`. Without this, the
-    -- tokens/keyword used/defined in a parser `p`, when `p : Parser` is an
-    -- anonymous parser resulting from the evaluation of a Lean term.
+    -- The following is taken from `evalParserConst`. Without this, when `p` is
+    -- an anonymous parser, and defines/uses new keywords/tokens, those do not
+    -- get recognized. I do not yet understand the details. But it seems to work
+    -- well.
     adaptUncacheableContextFn
       (fun ctx => { ctx with tokens := p.info.collectTokens [] |>.foldl (fun tks tk => tks.insert tk tk) ctx.tokens })
       p.fn
@@ -138,8 +141,6 @@ elab_rules : command
         | term => liftTermElabM do
           let τ : Expr := .const ``Parser []
           let e : Expr ← Term.elabTermEnsuringType term τ
-          -- logInfo ((Format.pretty · 47) <| repr <| removeSourceInfo <| term.raw)
-          -- logInfo ((Format.pretty · 47) <| repr e)
           let p ← unsafe evalExpr Parser τ e
           return collectTokensIntoContext p
   let stxToMsg := match stxToMsg? with

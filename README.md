@@ -1,1 +1,5 @@
-Experiments with [@Rob23oba](https://github.com/Rob23oba)'s parser tracing framework, [leanprover/lean4#13792](https://github.com/leanprover/lean4/pull/13792).
+This package slightly refactors and extends the user interface of [Robin Arnez](https://github.com/Rob23oba)'s experimental Lean 4 parser tracing framework, [lean4#13792](https://github.com/leanprover/lean4/pull/13792). See [Examples.lean](/Examples.lean) for what is added.
+
+The Lean 4 category parser prefers longest matches above anything else, even if those end up in error states. That can lead to surprising behavior; an instance of this was brought up [here](https://leanprover.zulipchat.com/#narrow/channel/113488-general/topic/Discussion.3A.20The.20Meta.20Caf.C3.A9/near/594796355) and discussed in the subsequent 2026-05-13 [Meta Café](https://leanprover.zulipchat.com/#narrow/channel/579629-Event-announcements/topic/The.20Meta.20Caf.C3.A9/with/604164945). After that, Robin [decided](https://leanprover.zulipchat.com/#narrow/channel/113488-general/topic/Discussion.3A.20The.20Meta.20Caf.C3.A9/near/596411375) to implement the parser tracing framework.
+
+[LongestMatches.lean](/LongestMatches.lean) contains an elucidation of the matter, using minimal examples.

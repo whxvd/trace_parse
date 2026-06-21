@@ -1,7 +1,11 @@
 name = "trace_parse"
 version = "0.1.0"
-default_targets = ["trace_parse"]
+defaultTargets = ["TraceParse"]
+testDriver = "Test"
 
 [[lean_lib]]
-  name = "trace_parse"
-  roots = ["TraceParse"]
+  name = "TraceParse"
+
+[[lean_lib]]
+  name = "Test"
+  roots = ["Examples", "LongestMatches"]

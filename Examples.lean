@@ -1,9 +1,10 @@
 import TraceParse
 open Lean Parser
 
--- Examples of what `#parse` can do more than `#trace_parse`
+-- Examples of what the `#parse` command defined here adds to the `#trace_parse`
+-- command defined in https://github.com/leanprover/lean4/pull/13792.
 
--- Info or error with final state when parser succeeds
+-- Info or error with final parser state
 
 /--
 info: Parser succeeded, had arity 1 and produced:
