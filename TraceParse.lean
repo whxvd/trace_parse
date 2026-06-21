@@ -55,16 +55,16 @@ def Lean.Parser.Parser.traceParse
   let s := mkParserState input
   let s := { s with traces := #[.stop] }
   let s := (andthenFn whitespace p.fn).run ictx pmctx toks s
-  (if s.errorMsg.isNone then logInfo else logError) <| ← do
+  (if s.errorMsg.isNone then logInfo else logError) =<< do
     let mut msg : MessageData := .nil
     match s.errorMsg with
-    | none => msg := (msg ++ ·) <|
-      (m!"Parser succeeded, had arity {s.stxStack.size} and produced:" ++ ·) <|
-      (indentD · ++ "\n") <| .intercalate "\n" <|
-        stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
-    | some e => msg := (msg ++ ·) <|
-      (m!"Parser failed with arity {s.stxStack.size} and error:" ++ ·) <|
-      (indentD m!"{e}") ++ "\n"
+      | none => msg := (msg ++ ·) <|
+        (m!"Parser succeeded, had arity {s.stxStack.size} and produced:" ++ ·) <|
+        (indentD · ++ "\n") <| .intercalate "\n" <|
+          stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
+      | some e => msg := (msg ++ ·) <|
+        (m!"Parser failed with arity {s.stxStack.size} and error:" ++ ·) <|
+        (indentD m!"{e}") ++ "\n"
     if (String.pos! input s.pos).IsAtEnd then
       msg := msg ++ "Input was consumed completely."
     else
@@ -84,7 +84,7 @@ def resolveParser (parserName : Ident) : CommandElabM Parser :=
     let res ← liftCoreM <| Lean.Parser.resolveParserName <| parserName
     if res.isEmpty then throwError "Unknown parser `{parserName}`"
     let [res] := res | throwError "Ambiguous parser name `{parserName}`"
-    let p ← match res with
+    match res with
       | .category nm => pure (categoryParser nm 0)
       | .parser nm _ => pure { fn := (evalParserConst nm) }
       | .alias val =>
