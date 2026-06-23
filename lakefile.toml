@@ -8,4 +8,4 @@ testDriver = "Test"
 
 [[lean_lib]]
   name = "Test"
-  roots = ["Examples", "LongestMatches"]
+  roots = ["Examples", "LongestMatches", "Scratch"]

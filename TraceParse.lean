@@ -15,10 +15,10 @@ def Lean.Parser.ParserTrace.toDebugTrace
       for child in children do
         toDebugTrace child omitNode posStr
     else
-      discard <| Lean.withTraceNode `debug (fun _ => return m!"Running `{descr}` at {posStr pos} with lhsPrec {lhsPrec}") do
+      discard <| Lean.withTraceNode `debug (fun _ => pure m!"Running `{descr}` at {posStr pos} with lhsPrec {lhsPrec}") do
         for child in children do
           toDebugTrace child omitNode posStr
-        return !fail
+        pure !fail
   | .cacheHit key entry =>
     trace[debug] m!"Cache hit for {key.parserName} at {posStr key.pos}: {format entry.stx}"
   | .log str => trace[debug] str
@@ -33,6 +33,7 @@ def Lean.Parser.Parser.traceParse
   (p : Parser) (input : String)
   (omits : List Name := [])
   (stxToMsg : Syntax → MessageData := .ofSyntax)
+  (printStxOnError : Bool := false)
 : CommandElabM Unit
 := do
   let omits := omits.map toString
@@ -57,14 +58,24 @@ def Lean.Parser.Parser.traceParse
   let s := (andthenFn whitespace p.fn).run ictx pmctx toks s
   (if s.errorMsg.isNone then logInfo else logError) =<< do
     let mut msg : MessageData := .nil
+    let arity := s.stxStack.size
     match s.errorMsg with
-      | none => msg := (msg ++ ·) <|
-        (m!"Parser succeeded, had arity {s.stxStack.size} and produced:" ++ ·) <|
+      | none =>
+        msg := (msg ++ ·) <|
+        (m!"Parser succeeded, had arity {arity}, and produced:" ++ ·) <|
         (indentD · ++ "\n") <| .intercalate "\n" <|
+        stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
+      | some e =>
+        if printStxOnError then
+          msg := (msg ++ ·) <|
+          (m!"Parser failed with stack size {arity} and produced:" ++ ·) <|
+          (indentD · ++ "\n") <| .intercalate "\n" <|
           stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
-      | some e => msg := (msg ++ ·) <|
-        (m!"Parser failed with arity {s.stxStack.size} and error:" ++ ·) <|
-        (indentD m!"{e}") ++ "\n"
+          msg := msg ++ (m!"Error:\n" ++ (indentD m!"{e}") ++ "\n")
+        else
+          msg := (msg ++ ·) <|
+          (m!"Parser failed with stack size {arity} and error:" ++ ·) <|
+          (indentD m!"{e}") ++ "\n"
     if (String.pos! input s.pos).IsAtEnd then
       msg := msg ++ "Input was consumed completely."
     else
@@ -72,7 +83,7 @@ def Lean.Parser.Parser.traceParse
         m!"Parsing ended at {posStr s.pos} and left" ++
         indentD (input.extract (String.pos! input s.pos) input.endPos).quote ++
         "\nunparsed."
-    return msg
+    pure msg
   withScope (fun scope => { scope with opts := scope.opts.setBool `trace.debug true }) do
     for trace in s.traces do
       trace.toDebugTrace omits.contains posStr
@@ -142,12 +153,21 @@ elab_rules : command
           let τ : Expr := .const ``Parser []
           let e : Expr ← Term.elabTermEnsuringType term τ
           let p ← unsafe evalExpr Parser τ e
-          return collectTokensIntoContext p
-  let stxToMsg := match stxToMsg? with
-    | none => .ofSyntax
-    | some tk => .ofFormat ∘ if tk.raw[0].getAtomVal == "format"
-      then format else repr ∘ removeSourceInfo
+          pure <| collectTokensIntoContext p
+  let (stxToMsg, printStxOnError) := match stxToMsg? with
+    | none =>
+      -- pretty printing does not handle `Syntax.missing`
+      (MessageData.ofSyntax, false)
+    | some tk =>
+      let toFormat := if tk.raw[0].getAtomVal == "format"
+        then format
+        else repr ∘ removeSourceInfo
+      -- `format` and `repr` have no problem with `Syntax.missing`
+      (MessageData.ofFormat ∘ toFormat, true)
   let omits := omits.toList.map (·.getId)
   let input := input.getString
   withRef tk do
-    parser.traceParse input omits stxToMsg
+    parser.traceParse input
+      (omits := omits)
+      (stxToMsg := stxToMsg)
+      (printStxOnError := printStxOnError)
