@@ -50,7 +50,7 @@ def Lean.Parser.Parser.traceParse
     currNamespace := ← getCurrNamespace
     openDecls := ← getOpenDecls
   }
-  let toks := getTokenTable (← getEnv)
+  let toks := getTokenTable <|← getEnv
   let s := mkParserState input
   let s := { s with traces := #[.stop] }
   let s := (andthenFn whitespace p.fn).run ictx pmctx toks s
@@ -60,29 +60,29 @@ def Lean.Parser.Parser.traceParse
     let mut msg : MessageData := .nil
     let arity := s.stxStack.size
     match s.errorMsg with
-      | none =>
+    | none =>
+      msg := (msg ++ ·) <|
+      (m!"Parser succeeded, had arity {arity}, and produced:" ++ ·) <|
+      (indentD · ++ "\n") <| .intercalate "\n" <|
+      stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
+    | some e =>
+      if printStxOnError then
         msg := (msg ++ ·) <|
-        (m!"Parser succeeded, had arity {arity}, and produced:" ++ ·) <|
+        (m!"Parser failed with stack size {arity} and produced:" ++ ·) <|
         (indentD · ++ "\n") <| .intercalate "\n" <|
         stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
-      | some e =>
-        if printStxOnError then
-          msg := (msg ++ ·) <|
-          (m!"Parser failed with stack size {arity} and produced:" ++ ·) <|
-          (indentD · ++ "\n") <| .intercalate "\n" <|
-          stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
-          msg := msg ++ (m!"Error:" ++ (indentD m!"{e}") ++ "\n")
-        else
-          msg := (msg ++ ·) <|
-          (m!"Parser failed with stack size {arity} and error:" ++ ·) <|
-          (indentD m!"{e}") ++ "\n"
+        msg := msg ++ (m!"Error:" ++ (indentD m!"{e}") ++ "\n")
+      else
+        msg := (msg ++ ·) <|
+        (m!"Parser failed with stack size {arity} and error:" ++ ·) <|
+        (indentD m!"{e}") ++ "\n"
     if (String.pos! input s.pos).IsAtEnd then
       msg := msg ++ "Input was consumed completely."
     else
       msg := msg ++
-        m!"Parsing ended at {posStr s.pos} and left" ++
-        indentD (input.extract (String.pos! input s.pos) input.endPos).quote ++
-        "\nunparsed."
+      m!"Parsing ended at {posStr s.pos} and left" ++
+      indentD (input.extract (String.pos! input s.pos) input.endPos).quote ++
+      "\nunparsed."
     pure msg
   withScope (fun scope => { scope with opts := scope.opts.setBool `trace.debug true }) do
     for trace in s.traces do
@@ -96,12 +96,12 @@ def resolveParser (parserName : Ident) : CommandElabM Parser :=
     if res.isEmpty then throwError "Unknown parser `{parserName}`"
     let [res] := res | throwError "Ambiguous parser name `{parserName}`"
     match res with
-      | .category nm => pure (categoryParser nm 0)
-      | .parser nm _ => pure { fn := (evalParserConst nm) }
-      | .alias val =>
-        match val with
-        | .const c => pure c
-        | _ => throwError "Unexpected parser alias `{parserName}`, must not take parameters"
+    | .category nm => pure (categoryParser nm 0)
+    | .parser nm _ => pure { fn := (evalParserConst nm) }
+    | .alias val =>
+      match val with
+      | .const c => pure c
+      | _ => throwError "Unexpected parser alias `{parserName}`, must not take parameters"
 
 syntax (name := parse)
   "#parse" (" : " term:max)?
@@ -146,24 +146,27 @@ The order of argments is exemplified by `#parse : ident +repr -token "x"`.
 elab_rules : command
 | `(#parse%$tk $[: $parser]? $[+$stxToMsg?]? $[-$omits:ident]* $input:str) => do
   let parser : Parser ← match parser with
-    | none => resolveParser <| mkIdent `term
-    | some term => withRef term <| match term with
-        | `($id:ident) => resolveParser id
-        | term => liftTermElabM do
-          let τ : Expr := .const ``Parser []
-          let e : Expr ← Term.elabTermEnsuringType term τ
-          let p ← unsafe evalExpr Parser τ e
-          pure <| collectTokensIntoContext p
+  | none => resolveParser <| mkIdent `term
+  | some term => withRef term <| match term with
+    | `($id:ident) => resolveParser id
+    | term => liftTermElabM do
+      let τ : Expr := .const ``Parser []
+      let e : Expr ← Term.elabTermEnsuringType term τ
+      let p ← unsafe evalExpr Parser τ e
+      pure <| collectTokensIntoContext p
   let (stxToMsg, printStxOnError) := match stxToMsg? with
-    | none =>
+  | none =>
+    (MessageData.ofSyntax,
       -- pretty printing does not handle `Syntax.missing`
-      (MessageData.ofSyntax, false)
-    | some tk =>
-      let toFormat := if tk.raw[0].getAtomVal == "format"
-        then format
-        else repr ∘ removeSourceInfo
+      false)
+  | some tk =>
+    let toFormat := match tk.raw[0].getAtomVal with
+    | "format" => format
+    | "repr" => repr ∘ removeSourceInfo
+    | _ => unreachable!
+    (MessageData.ofFormat ∘ toFormat,
       -- `format` and `repr` have no problem with `Syntax.missing`
-      (MessageData.ofFormat ∘ toFormat, true)
+      true)
   let omits := omits.toList.map (·.getId)
   let input := input.getString
   withRef tk do
