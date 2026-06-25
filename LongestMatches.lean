@@ -8,7 +8,7 @@ syntax ab  := "a" "b"
 -- a". The parser succeeds, but ends before consuming the complete input.
 
 /--
-info: Parser succeeded, had arity 1 and produced:
+info: Parser succeeded, had arity 1, and produced:
   a
 Parsing ended at input:1:2 and left
   "a"
@@ -22,7 +22,7 @@ unparsed.
 -- expected token of the parser.
 
 /--
-error: Parser failed with arity 1 and error:
+error: Parser failed with stack size 1 and error:
   expected 'a'
 Parsing ended at input:1:0 and left
   "b"
@@ -36,7 +36,7 @@ unparsed.
 -- parser `ab` fails on "a a", but the first token remains consumed.
 
 /--
-error: Parser failed with arity 1 and error:
+error: Parser failed with stack size 1 and error:
   expected 'b'
 Parsing ended at input:1:2 and left
   "a"
@@ -60,7 +60,7 @@ syntax atomic_ab := atomic(ab)
 -- Now the position after failure is rewound to the start of the input.
 
 /--
-error: Parser failed with arity 1 and error:
+error: Parser failed with stack size 1 and error:
   expected 'b'
 Parsing ended at input:1:0 and left
   "a a"
@@ -93,7 +93,7 @@ syntax (name := lm₁) "a" : lm
 syntax (name := lm₂) "a" "a" "b" : lm
 
 /--
-error: Parser failed with arity 1 and error:
+error: Parser failed with stack size 1 and error:
   unexpected end of input; expected 'b'
 Input was consumed completely.
 ---
@@ -121,7 +121,7 @@ syntax (name := lm₁') atomic("a" "a" "b") : lm'
 syntax (name := lm₂') "a" : lm'
 
 /--
-info: Parser succeeded, had arity 1 and produced:
+info: Parser succeeded, had arity 1, and produced:
   a
 Parsing ended at input:1:2 and left
   "a"
@@ -152,7 +152,7 @@ syntax (name := lm₁'') "a" atomic("a" "b") : lm''
 syntax (name := lm₂'') "a" : lm''
 
 /--
-info: Parser succeeded, had arity 1 and produced:
+info: Parser succeeded, had arity 1, and produced:
   a
 Parsing ended at input:1:2 and left
   "a"

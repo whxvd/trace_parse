@@ -7,7 +7,7 @@ open Lean Parser
 -- Info or error with final parser state
 
 /--
-info: Parser succeeded, had arity 1 and produced:
+info: Parser succeeded, had arity 1, and produced:
   x
 Parsing ended at input:1:2 and left
   "x"
@@ -17,7 +17,7 @@ unparsed.
 #parse : ident "x x"
 
 /--
-error: Parser failed with arity 1 and error:
+error: Parser failed with stack size 1 and error:
   expected term
 Parsing ended at input:1:0 and left
   ":"
@@ -29,7 +29,7 @@ unparsed.
 -- Choice between pp, format, and repr for the parse results
 
 /--
-info: Parser succeeded, had arity 1 and produced:
+info: Parser succeeded, had arity 1, and produced:
   Lean.Syntax.ident (Lean.SourceInfo.none) "x".toRawSubstring `x []
 Input was consumed completely.
 -/
@@ -39,7 +39,7 @@ Input was consumed completely.
 -- Parsing of arbitraty expressions of type `Parser`
 
 /--
-info: Parser succeeded, had arity 2 and produced:
+info: Parser succeeded, had arity 2, and produced:
   "a"
   "a"
 Input was consumed completely.
@@ -57,7 +57,7 @@ Input was consumed completely.
 
 def myFrequentOmits : List Name := [`token]
 /--
-info: Parser succeeded, had arity 2 and produced:
+info: Parser succeeded, had arity 2, and produced:
   x
   x
 Parsing ended at input:1:4 and left
