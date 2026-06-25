@@ -71,7 +71,7 @@ def Lean.Parser.Parser.traceParse
           (m!"Parser failed with stack size {arity} and produced:" ++ ·) <|
           (indentD · ++ "\n") <| .intercalate "\n" <|
           stxToMsg <$> (s.stxStack.extract 0 s.stxStack.size).toList
-          msg := msg ++ (m!"Error:\n" ++ (indentD m!"{e}") ++ "\n")
+          msg := msg ++ (m!"Error:" ++ (indentD m!"{e}") ++ "\n")
         else
           msg := (msg ++ ·) <|
           (m!"Parser failed with stack size {arity} and error:" ++ ·) <|
