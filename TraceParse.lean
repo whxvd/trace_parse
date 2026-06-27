@@ -38,8 +38,6 @@ def Lean.Parser.Parser.traceParse
 := do
   let omits := omits.map toString
   let omits : Std.HashSet String := .ofList <| omits ++ omits.map (s!"node {·}")
-  -- NOTE: `Lean.Parser.runParserCategory` is an example in core for setting up
-  -- parser context and state, running a parser, and processing the results.
   let ictx := mkInputContext input "<input>"
   let posStr pos :=
     let pos := ictx.fileMap.toPosition pos
@@ -55,7 +53,7 @@ def Lean.Parser.Parser.traceParse
   let s := { s with traces := #[.stop] }
   let s := (andthenFn whitespace p.fn).run ictx pmctx toks s
   -- TODO: `Lean.Parser.runParserCategory` effectively also inspects
-  -- `ParserState.recoveredErrors`. Is that relevant (here)? Probably yes.
+  -- `ParserState.recoveredErrors`. Is that relevant (here)?
   (if s.errorMsg.isNone then logInfo else logError) =<< do
     let mut msg : MessageData := .nil
     let arity := s.stxStack.size
